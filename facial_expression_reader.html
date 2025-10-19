@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facial Expression Reader</title>
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        .video-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        #video {
+            border-radius: 15px;
+            max-width: 100%;
+            transform: scaleX(-1);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%) scaleX(-1);
+            border-radius: 15px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 30px;
+            font-size: 1em;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+        }
+
+        #startBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        #stopBtn {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        #startBtn:disabled, #stopBtn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+
+        .status.loading {
+            background: rgba(255, 193, 7, 0.3);
+        }
+
+        .status.ready {
+            background: rgba(76, 175, 80, 0.3);
+        }
+
+        .status.error {
+            background: rgba(244, 67, 54, 0.3);
+        }
+
+        .emotion-panel {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .emotion-panel h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .emotion-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .emotion-label {
+            width: 120px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .emotion-bar-container {
+            flex: 1;
+            height: 25px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .emotion-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 10px;
+        }
+
+        .emotion-value {
+            font-size: 0.9em;
+            font-weight: 600;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .dominant-emotion {
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            font-size: 1.3em;
+        }
+
+        .emoji {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎭 Facial Expression Reader</h1>
+        <p>AI-Powered Real-Time Emotion Detection</p>
+    </div>
+
+    <div class="container">
+        <div class="status loading" id="status">Loading AI models...</div>
+
+        <div class="video-container">
+            <video id="video" width="640" height="480" autoplay muted></video>
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+            <button id="startBtn" disabled>Start Camera</button>
+            <button id="stopBtn" disabled>Stop Camera</button>
+        </div>
+
+        <div class="emotion-panel" id="emotionPanel" style="display: none;">
+            <h2>Detected Emotions</h2>
+            <div id="emotionBars"></div>
+            <div class="dominant-emotion" id="dominantEmotion"></div>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const emotionPanel = document.getElementById('emotionPanel');
+        const emotionBars = document.getElementById('emotionBars');
+        const dominantEmotion = document.getElementById('dominantEmotion');
+
+        let stream = null;
+        let isDetecting = false;
+
+        const emotionEmojis = {
+            neutral: '😐',
+            happy: '😊',
+            sad: '😢',
+            angry: '😠',
+            fearful: '😨',
+            disgusted: '🤢',
+            surprised: '😲'
+        };
+
+        async function loadModels() {
+            try {
+                // Wait for face-api to be loaded
+                if (typeof faceapi === 'undefined') {
+                    await new Promise(resolve => {
+                        const checkFaceApi = setInterval(() => {
+                            if (typeof faceapi !== 'undefined') {
+                                clearInterval(checkFaceApi);
+                                resolve();
+                            }
+                        }, 100);
+                    });
+                }
+
+                const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+                
+                await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+                await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+                
+                status.textContent = 'AI models loaded! Click "Start Camera" to begin.';
+                status.className = 'status ready';
+                startBtn.disabled = false;
+            } catch (error) {
+                status.textContent = 'Error loading models. Please refresh the page.';
+                status.className = 'status error';
+                console.error('Error loading models:', error);
+            }
+        }
+
+        async function startVideo() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                });
+
+                status.textContent = 'Camera started! Detecting emotions...';
+                status.className = 'status ready';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                emotionPanel.style.display = 'block';
+                
+                isDetecting = true;
+                detectExpressions();
+            } catch (error) {
+                status.textContent = 'Error accessing camera. Please allow camera permissions.';
+                status.className = 'status error';
+                console.error('Error accessing camera:', error);
+            }
+        }
+
+        function stopVideo() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                stream = null;
+            }
+            isDetecting = false;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            status.textContent = 'Camera stopped. Click "Start Camera" to resume.';
+            status.className = 'status';
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            emotionPanel.style.display = 'none';
+        }
+
+        async function detectExpressions() {
+            if (!isDetecting) return;
+
+            const detections = await faceapi
+                .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                .withFaceExpressions();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (detections && detections.length > 0) {
+                const detection = detections[0];
+                const { x, y, width, height } = detection.detection.box;
+                
+                // Draw face box
+                ctx.strokeStyle = '#667eea';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, width, height);
+                
+                // Update emotion bars
+                updateEmotionBars(detection.expressions);
+            }
+
+            requestAnimationFrame(detectExpressions);
+        }
+
+        function updateEmotionBars(expressions) {
+            const emotions = Object.entries(expressions).sort((a, b) => b[1] - a[1]);
+            
+            emotionBars.innerHTML = emotions.map(([emotion, value]) => `
+                <div class="emotion-item">
+                    <div class="emotion-label">${emotionEmojis[emotion]} ${emotion}</div>
+                    <div class="emotion-bar-container">
+                        <div class="emotion-bar" style="width: ${value * 100}%">
+                            <span class="emotion-value">${(value * 100).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Show dominant emotion
+            const [dominant, confidence] = emotions[0];
+            dominantEmotion.innerHTML = `
+                <div class="emoji pulse">${emotionEmojis[dominant]}</div>
+                <div>Dominant Emotion: <strong>${dominant.toUpperCase()}</strong></div>
+                <div>Confidence: ${(confidence * 100).toFixed(1)}%</div>
+            `;
+        }
+
+        startBtn.addEventListener('click', startVideo);
+        stopBtn.addEventListener('click', stopVideo);
+
+        // Wait for DOM and face-api to load before initializing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', loadModels);
+        } else {
+            loadModels();
+        }
+    </script>
+</body>
+</html>
